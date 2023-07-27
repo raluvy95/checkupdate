@@ -29,7 +29,7 @@ options:
   --show      Show list of packages avaliable
 ```
 
-```checkupdate --show```
+```checkupdate --show```<br>
 ![](./screenshot/sample.png)
 # Upgrade
 `git pull` and overwrite `checkupdate` if you only copied that file

@@ -1,0 +1,116 @@
+#!/bin/env python3
+
+from subprocess import check_output, CalledProcessError
+from argparse import ArgumentParser
+import difflib
+from shutil import which
+
+
+class Colors:
+    """ ANSI color codes """
+    RED = "\033[0;31m"
+    GREEN = "\033[0;32m"
+    BLUE = "\033[0;34m"
+    YELLOW = "\033[1;33m"
+    BOLD = "\033[1m"
+    END = "\033[0m"
+
+
+if not which("pacman"):
+    print("This program is designed for Arch linux and Arch-based users!! Other distro are not supported. You may simply duckduckgo \"how to check for package update in <your distro>\"")
+    quit(3)
+
+
+parser = ArgumentParser(
+    description="Small program that prints packages avaliable")
+parser.add_argument('--withAUR', action='store_true',
+                    help='Enable AUR (requires to have aurutils installed)')
+parser.add_argument('--show', action='store_true',
+                    help='Show list of packages avaliable')
+
+args = parser.parse_args()
+
+
+def initialize_update() -> list[str]:
+    if not which("checkupdates"):
+        print(f"Install {Colors.BOLD}pacman-contrib{Colors.END} please")
+        quit(1)
+    try:
+        updates = check_output(["checkupdates"]).decode().splitlines()
+        if args.withAUR:
+            if not which("aur"):
+                print(
+                    f"Install {Colors.BOLD}aurutils{Colors.END} please. Better remove {Colors.BLUE}--withAUR{Colors.END} to ignore this!")
+                quit(1)
+            try:
+                aur_updates = check_output(
+                    "pacman -Qm | aur vercmp", shell=True).decode().splitlines()
+                updates.extend(aur_updates)
+            except CalledProcessError:
+                pass
+        return updates
+    except CalledProcessError as e:
+        if e.returncode == 2:
+            print("No updates avaliable")
+            quit(1)
+        else:
+            raise e
+
+
+def get_color_diff(old_ver: str, new_ver: str):
+    diff = difflib.ndiff(old_ver, new_ver)
+
+    output_original = ""
+    output_modified = ""
+    for line in diff:
+        code = line[:2]
+        char = line[2:]
+        if code == '  ':
+            output_original += char
+            output_modified += char
+        elif code == '- ':
+            output_original += Colors.RED + Colors.BOLD + char + Colors.END
+        elif code == '+ ':
+            output_modified += Colors.GREEN + Colors.BOLD + char + Colors.END
+
+    return output_original, output_modified
+
+
+def default_pacman_command() -> str:
+    aur_helpers = ["yay", "paru", "pakku",
+                   "pacaur", "aurman", "pikaur", "trizen"]
+    for pkg in aur_helpers:
+        if which(pkg):
+            return pkg
+    return "pacman"
+
+
+def default_sudo() -> str:
+    if not which("sudo"):
+        return "doas"
+    return "sudo"
+
+
+if __name__ == "__main__":
+    list = initialize_update()
+
+    def out():
+        print(f"{Colors.BOLD}There are {Colors.BLUE}{len(list)}{Colors.END}{Colors.BOLD} packages avaliable!{Colors.END}\nType {Colors.GREEN}{Colors.BOLD}checkupdate --show{Colors.END} to show list of packages avaliable to update!")
+    if args.show:
+        lines = []
+        for i in list:
+            pkg_name, old_version, _, new_version = i.split(" ")
+            color_old_version, color_new_version = get_color_diff(
+                old_version, new_version)
+            format_pkg_name = Colors.BOLD + pkg_name + Colors.END
+            expand = " " * (30 - len(pkg_name))
+            lines.append(
+                len(f"{pkg_name}{expand}{old_version} -> {new_version}"))
+            print(
+                f"{format_pkg_name}{expand}{color_old_version} -> {color_new_version}")
+        print("=" * max(lines))
+
+        print(
+            f"{Colors.BLUE}{Colors.BOLD}{len(list)}{Colors.END} package{'s' if len(list) > 1 else ''} avaliable to update. Type {Colors.YELLOW}{default_sudo()} {default_pacman_command()} -Syu{Colors.END} to apply!")
+    else:
+        out()

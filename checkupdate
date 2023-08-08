@@ -4,6 +4,9 @@ from subprocess import check_output, CalledProcessError
 from argparse import ArgumentParser
 import difflib
 from shutil import which
+from os import path, mkdir
+from datetime import datetime
+import json
 
 
 class Colors:
@@ -31,16 +34,17 @@ parser.add_argument('--show', action='store_true',
 
 args = parser.parse_args()
 
+CACHE_DIR = path.join(path.expanduser("~"), ".cache")
 
-def initialize_update() -> list[str]:
 
+def get_update_from_call(aur: bool = False):
     if not which("checkupdates"):
         print(f"Install {Colors.BOLD}pacman-contrib{Colors.END} please")
         quit(1)
     try:
         print(f"{Colors.GRAY}Checking for updates...{Colors.END}")
         updates = check_output(["checkupdates"]).decode().splitlines()
-        if args.withAUR:
+        if aur:
             if not which("aur"):
                 print(
                     f"Install {Colors.BOLD}aurutils{Colors.END} please. Better remove {Colors.BLUE}--withAUR{Colors.END} to ignore this!")
@@ -59,6 +63,36 @@ def initialize_update() -> list[str]:
             quit(1)
         else:
             raise e
+
+
+def get_avaliable_packages():
+    if not path.isdir(CACHE_DIR):
+        mkdir(CACHE_DIR)
+    if not path.isfile(path.join(CACHE_DIR, "arch-checkupdate.json")):
+        default_json = {
+            "last-update": datetime.now().isoformat(),
+            "withAUR": False,
+            "packages": []
+        }
+        with open(path.join(CACHE_DIR, "arch-checkupdate.json"), 'x') as f:
+            json.dump(default_json, f)
+            f.close()
+        return get_update_from_call(args.withAUR)
+    with open(path.join(CACHE_DIR, "arch-checkupdate.json"), 'r+') as f:
+        j = json.load(f)
+        last_update = datetime.now().fromisoformat(j["last-update"])
+        if datetime.now().day == last_update.day and len(j["packages"]) != 0 and j["withAUR"] == args.withAUR:
+            return j["packages"]
+        else:
+            packages_to_be_written = get_update_from_call(args.withAUR)
+            j["packages"] = packages_to_be_written
+            j["withAUR"] = args.withAUR
+            j["last-update"] = datetime.now().isoformat()
+            f.seek(0)
+            json.dump(j, f)
+            f.truncate()
+            f.close()
+            return packages_to_be_written
 
 
 def get_color_diff(old_ver: str, new_ver: str):
@@ -100,7 +134,7 @@ def default_sudo() -> str:
 
 
 if __name__ == "__main__":
-    list = initialize_update()
+    list = get_avaliable_packages()
     if args.show:
 
         lines = []

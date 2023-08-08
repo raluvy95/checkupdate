@@ -31,6 +31,8 @@ parser.add_argument('--withAUR', action='store_true',
                     help='Enable AUR (requires to have aurutils installed)')
 parser.add_argument('--show', action='store_true',
                     help='Show list of packages avaliable')
+parser.add_argument('-x', action='store_true',
+                    help="Run without using cache file")
 
 args = parser.parse_args()
 
@@ -66,6 +68,8 @@ def get_update_from_call(aur: bool = False):
 
 
 def get_avaliable_packages():
+    if args.x:
+        return get_update_from_call(args.withAUR)
     if not path.isdir(CACHE_DIR):
         mkdir(CACHE_DIR)
     if not path.isfile(path.join(CACHE_DIR, "arch-checkupdate.json")):
@@ -151,7 +155,7 @@ if __name__ == "__main__":
             print(
                 f"{format_pkg_name}{expand}{color_old_version} -> {color_new_version}")
 
-        print("=" * max(lines))
+        print("=" * max(lines))  # type: ignore
 
         print(
             f"{Colors.BLUE}{Colors.BOLD}{len(list)}{Colors.END} package{'s' if len(list) > 1 else ''} avaliable to update. Type {Colors.YELLOW}{default_sudo()} {default_pacman_command()} -Syu{Colors.END} to apply!")
